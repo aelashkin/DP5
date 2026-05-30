@@ -152,10 +152,17 @@ Relationship to Legacy Description Files
 The package still supports hand-written NMR description files because DP4-style
 workflows pre-date automated raw-data processing. When a description file is
 used, the code bypasses the FID pipelines and instead parses manually supplied
-shifts, equivalence groups, and omitted atoms. This is why
-:mod:`dp5.nmr_processing.description_files` remains part of the public module:
-it preserves compatibility with curated inputs while the automated pipelines are
-used whenever raw spectra are available.
+shifts, equivalence groups, and omitted atoms.
+
+Manual descriptions are strict and equivalence-aware by default. Carbon
+equivalence groups are collapsed into required signal groups, omitted atoms are
+excluded from those groups, and each non-omitted carbon group must receive
+exactly one experimental carbon signal. The DP5 carbon score is then aggregated
+over those required groups instead of arbitrary individual atoms. The previous
+loose matching behavior is still available with the ``legacy`` assignment mode.
+This is why :mod:`dp5.nmr_processing.description_files` remains part of the
+public module: it preserves compatibility with curated inputs while the
+automated pipelines are used whenever raw spectra are available.
 
 Practical Reading Guide
 =======================

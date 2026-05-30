@@ -10,10 +10,11 @@ from .helper_functions import *
 from .proton.process import proton_processing, proton_assignment
 from .proton.plot import plot_proton
 from .description_files import (
-    process_description,
+    parse_manual_description,
     pairwise_assignment,
     matching_assignment,
 )
+from .manual_assignment import assign_manual_carbon_strict
 from .carbon.process import carbon_processing, carbon_assignment
 from .carbon.plot import plot_carbon
 
@@ -49,11 +50,22 @@ class NMRData:
     """
 
     def __init__(
-        self, nmr_source: List[str], solvent: str, output_folder: Path = None
+        self,
+        nmr_source: List[str],
+        solvent: str,
+        output_folder: Path = None,
+        assignment_mode: str = "strict",
+        allow_extra_peaks: bool = False,
+        allow_missing_peaks: bool = False,
     ):
         self.nmr_source = [Path(i) for i in nmr_source]
         self.solvent = solvent
         self.output_folder = Path.cwd() if output_folder is None else output_folder
+        if assignment_mode not in ("strict", "legacy"):
+            raise ValueError("NMR assignment mode must be 'strict' or 'legacy'")
+        self.assignment_mode = assignment_mode
+        self.allow_extra_peaks = allow_extra_peaks
+        self.allow_missing_peaks = allow_missing_peaks
         self.Atoms = []  # Element labels
         self.Cshifts = []  # Experimental C NMR shifts
         self.Clabels = []  # Experimental C NMR labels, if any
@@ -178,14 +190,19 @@ class NMRData:
         :rtype: None
         """
 
-        (
-            self.C_labels,
-            self.C_exp,
-            self.H_labels,
-            self.H_exp,
-            self.equivalents,
-            self.omits,
-        ) = process_description(file)
+        self.manual_description = parse_manual_description(file)
+        self.C_labels = [
+            list(shift.labels) for shift in self.manual_description.carbon_shifts
+        ]
+        self.C_exp = [shift.value for shift in self.manual_description.carbon_shifts]
+        self.H_labels = [
+            list(shift.labels) for shift in self.manual_description.proton_shifts
+        ]
+        self.H_exp = [shift.value for shift in self.manual_description.proton_shifts]
+        self.equivalents = [
+            list(group) for group in self.manual_description.equivalence_groups
+        ]
+        self.omits = list(self.manual_description.omitted_labels)
 
     def assign(self, mol):
         """Assign processed experimental peaks to a candidate molecule.
@@ -223,7 +240,16 @@ class NMRData:
             C_exp = carbon_assignment(self.carbondata, _mol, C_shifts, C_labels)
             plot_carbon(self.carbondata, self.output_folder, mol, C_exp)
         elif hasattr(self, "C_exp"):
-            C_exp = matching_assignment(C_shifts, self.C_exp, threshold=40)
+            if self.assignment_mode == "strict":
+                C_exp = assign_manual_carbon_strict(
+                    mol,
+                    self.manual_description,
+                    allow_extra_peaks=self.allow_extra_peaks,
+                    allow_missing_peaks=self.allow_missing_peaks,
+                )
+            else:
+                C_exp = matching_assignment(C_shifts, self.C_exp, threshold=40)
+                mol.C_assignment_mode = "legacy"
 
         return C_exp, H_exp
 

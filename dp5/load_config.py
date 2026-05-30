@@ -92,6 +92,24 @@ def main():
         help="Atom indices matching input SD File for stereocentres to mutate, keep the rest intact.",
     )
 
+    parser.add_argument(
+        "--nmr-assignment-mode",
+        choices=("strict", "legacy"),
+        help="Manual NMR description assignment mode. Defaults to strict.",
+    )
+
+    parser.add_argument(
+        "--allow-extra-peaks",
+        action="store_true",
+        help="Strict manual NMR mode: allow and report extra experimental carbon shifts.",
+    )
+
+    parser.add_argument(
+        "--allow-missing-peaks",
+        action="store_true",
+        help="Strict manual NMR mode: allow and report missing required carbon groups.",
+    )
+
     parser.add_argument("-l", "--log_filename", help="Path to log file", default="")
 
     parser.add_argument("--log_level", choices=LOGLEVEL_CHOICES)
@@ -122,6 +140,18 @@ def main():
     )
 
     logger.info("Preparing configuration")
+    config.setdefault("nmr", {})
+    config["nmr"].setdefault("assignment_mode", "strict")
+    config["nmr"].setdefault("allow_extra_peaks", False)
+    config["nmr"].setdefault("allow_missing_peaks", False)
+
+    if args.nmr_assignment_mode is not None:
+        config["nmr"]["assignment_mode"] = args.nmr_assignment_mode
+    if args.allow_extra_peaks:
+        config["nmr"]["allow_extra_peaks"] = True
+    if args.allow_missing_peaks:
+        config["nmr"]["allow_missing_peaks"] = True
+
     # Override workflow flag
     if args.workflow is not None:
         config["workflow"]["cleanup"] = "c" in args.workflow

@@ -49,6 +49,9 @@ def runner(config):
         config["nmr_file"],
         config["solvent"],
         config["output_folder"],
+        config.get("nmr", {}).get("assignment_mode", "strict"),
+        config.get("nmr", {}).get("allow_extra_peaks", False),
+        config.get("nmr", {}).get("allow_missing_peaks", False),
     )
     # process data first!!!!
     data.assign_nmr_spectra(nmr_data)

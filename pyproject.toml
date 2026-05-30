@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=42,<81", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -19,7 +19,8 @@ maintainers = [
 dependencies = [
         "tomli",
         "numpy<2",
-        "rdkit",
+        "rdkit==2025.9.3",
+        "setuptools<81",
         "lmfit",
         "matplotlib",
         "scipy>=1.10",
