@@ -12,6 +12,11 @@ log_file = ""
 output_folder = "" # uses current working directory by default
 gui_running = false # will work with GUI
 
+[nmr]
+assignment_mode = "strict" # strict validates manual descriptions and scores carbon groups; legacy preserves old loose assignment
+allow_extra_peaks = false # strict manual mode: allow and report experimental carbon shifts not assigned to required groups
+allow_missing_peaks = false # strict manual mode: allow and report required carbon groups without experimental shifts
+
 
 [workflow]
 cleanup = false # c RDkit cleaning of input structures and 3d coordinate generation
@@ -101,5 +106,4 @@ max_concurrent_jobs = 75 # 75 on Ziggy, 320 on Darwin
 
 stats_model = "g"
 param_file = "none"
-
 

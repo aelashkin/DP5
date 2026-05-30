@@ -65,11 +65,17 @@ class DP5:
           mols: Molecule objects
         """
         data_dic_path = self.output_folder / "dp5" / "data_dic.p"
+        expected_signature = _dp5_cache_signature(mols, self.dft_shifts)
         dp5_data = DP5Data(mols, data_dic_path)
+        cache_valid = False
         if dp5_data.exists:
             logger.info("Found existing DP5 probability file")
             dp5_data.load()
-        else:
+            cache_valid = getattr(dp5_data, "cache_signature", None) == expected_signature
+            if not cache_valid:
+                logger.info("Existing DP5 probability file does not match assignments")
+
+        if not cache_valid:
             logger.info("Calculating DP5 probabilites...")
             (
                 dp5_data.Clabels,
@@ -80,6 +86,33 @@ class DP5:
                 dp5_data.CDP5_atom_probs,
                 dp5_data.CDP5_mol_probs,
             ) = self.C_DP5(mols)
+            dp5_data.cache_signature = expected_signature
+            dp5_data.Cassignment_coverage = [
+                _coverage_for_dp5(mol, self.dft_shifts) for mol in mols
+            ]
+            dp5_data.Cassignment_mode = [
+                coverage["mode"] for coverage in dp5_data.Cassignment_coverage
+            ]
+            dp5_data.Ccoverage_status = [
+                coverage["status"] for coverage in dp5_data.Cassignment_coverage
+            ]
+            dp5_data.Cgroup_members = [
+                getattr(mol, "C_group_members", [[label] for label in mol.C_labels])
+                for mol in mols
+            ]
+            dp5_data.Cgroup_atom_indices = [
+                getattr(
+                    mol,
+                    "C_group_atom_indices",
+                    [[int(label[1:]) - 1] for label in mol.C_labels],
+                )
+                for mol in mols
+            ]
+            dp5_data.Cgroup_labels = dp5_data.Clabels
+            dp5_data.Cgroup_calculated_shifts = dp5_data.Cshifts
+            dp5_data.Cgroup_experimental_shifts = dp5_data.Cexp
+            dp5_data.Cgroup_errors = dp5_data.Cerrors
+            dp5_data.Cgroup_probabilities = dp5_data.CDP5_atom_probs
             dp5_data.save()
         return dp5_data.output
 
@@ -104,7 +137,9 @@ class DP5ProbabilityCalculator:
         self.atom_type = atom_type
 
     @abstractmethod
-    def rescale_probabilities(self, mol_probs, errors, error_threshold=2):
+    def rescale_probabilities(
+        self, mol_probs, errors, error_threshold=2, grouped=False
+    ):
         """
         Scales and aggregated atomic probabilities.
 
@@ -137,14 +172,32 @@ class DP5ProbabilityCalculator:
         """
         all_labels = []
         rep_df = []
+        grouped_mode = False
         for mol_id, mol in enumerate(mols):
-            calculated, experimental, labels, indices = self.get_shifts_and_labels(mol)
+            (
+                calculated,
+                experimental,
+                labels,
+                atom_indices,
+                group_atom_indices,
+            ) = self.get_shifts_and_labels(mol)
             # drop unassigned !
             has_exp = np.isfinite(experimental)
             new_calcs = calculated[:, has_exp]
             new_exps = experimental[has_exp]
             new_labs = labels[has_exp]
-            new_inds = indices[has_exp]
+            if len(new_exps) == 0:
+                raise ValueError("No assigned experimental carbon shifts available for DP5")
+
+            if group_atom_indices is None:
+                new_inds = atom_indices[has_exp]
+                group_positions = None
+            else:
+                grouped_mode = True
+                selected_groups = [
+                    group_atom_indices[i] for i in np.where(has_exp)[0].tolist()
+                ]
+                new_inds, group_positions = _flatten_group_atom_indices(selected_groups)
 
             # generate scaled errors
             scaled = scale_nmr(new_calcs, new_exps)
@@ -162,6 +215,7 @@ class DP5ProbabilityCalculator:
                     new_calcs,
                     new_exps,
                     corrected_errors,
+                    group_positions,
                 )
             )
 
@@ -176,6 +230,7 @@ class DP5ProbabilityCalculator:
                 "conf_shifts",
                 "exp_shifts",
                 "errors",
+                "group_positions",
             ],
         )
         # each row of dataframe represents a geometry
@@ -197,7 +252,9 @@ class DP5ProbabilityCalculator:
         cmae = weighted_errors.apply(lambda x: np.mean(np.abs(x)))
 
         # rescale and aggregate probabilities
-        weighted_probs, total_probs = self.rescale_probabilities(weighted_probs, cmae)
+        weighted_probs, total_probs = self.rescale_probabilities(
+            weighted_probs, cmae, grouped=grouped_mode
+        )
 
         calc_shifts_analysed = self.boltzmann_weight(rep_df, "conf_shifts")
         exp_shifts_analysed = rep_df.groupby("mol_id")["exp_shifts"].first()
@@ -228,12 +285,26 @@ class DP5ProbabilityCalculator:
           0-based indices of relevant atoms
         """
         at = self.atom_type
-        conformer_shifts = getattr(mol, "conformer_%s_pred" % at)
-        assigned_shifts = getattr(mol, "%s_exp" % at)
-        atom_labels = getattr(mol, "%s_labels" % at)
-        atom_indices = np.array([int(label[len(at) :]) - 1 for label in atom_labels])
+        if (
+            at == "C"
+            and getattr(mol, "C_assignment_mode", "legacy") == "strict"
+            and hasattr(mol, "conformer_C_group_pred")
+        ):
+            conformer_shifts = mol.conformer_C_group_pred
+            assigned_shifts = mol.C_group_exp
+            atom_labels = mol.C_group_labels
+            group_atom_indices = [
+                np.array(indices, dtype=int) for indices in mol.C_group_atom_indices
+            ]
+            atom_indices = np.array([], dtype=int)
+        else:
+            conformer_shifts = getattr(mol, "conformer_%s_pred" % at)
+            assigned_shifts = getattr(mol, "%s_exp" % at)
+            atom_labels = getattr(mol, "%s_labels" % at)
+            atom_indices = np.array([int(label[len(at) :]) - 1 for label in atom_labels])
+            group_atom_indices = None
 
-        return conformer_shifts, assigned_shifts, atom_labels, atom_indices
+        return conformer_shifts, assigned_shifts, atom_labels, atom_indices, group_atom_indices
 
 
 class ErrorDP5ProbabilityCalculator(DP5ProbabilityCalculator):
@@ -261,6 +332,9 @@ class ErrorDP5ProbabilityCalculator(DP5ProbabilityCalculator):
         logger.debug("Transforming representations")
         rep_df["representations"] = extract_representations(
             self.model, rep_df, self.batch_size
+        )
+        rep_df["representations"] = _aggregate_group_values(
+            rep_df, "representations"
         )
         rep_df["representations"] = rep_df["representations"].apply(
             self.transform.transform
@@ -322,8 +396,14 @@ class ErrorDP5ProbabilityCalculator(DP5ProbabilityCalculator):
 
         return probs
 
-    def rescale_probabilities(self, mol_probs, errors, error_threshold=2):
-        _, total_probs = super().rescale_probabilities(mol_probs, errors)
+    def rescale_probabilities(
+        self, mol_probs, errors, error_threshold=2, grouped=False
+    ):
+        _, total_probs = super().rescale_probabilities(
+            mol_probs, errors, grouped=grouped
+        )
+        if grouped:
+            return mol_probs, total_probs
         scaled_probs = []
         scaled_total = []
         for prob, error, total in zip(mol_probs, errors, total_probs):
@@ -365,6 +445,9 @@ class ExpDP5ProbabilityCalculator(DP5ProbabilityCalculator):
         logger.debug("Transforming representations")
         rep_df["representations"] = extract_representations(
             self.model, rep_df, self.batch_size
+        )
+        rep_df["representations"] = _aggregate_group_values(
+            rep_df, "representations"
         )
         rep_df["representations"] = rep_df["representations"].apply(
             self.transform.transform
@@ -445,6 +528,7 @@ class QuantileDP5ProbabilityCalculator(DP5ProbabilityCalculator):
     def probfunction(self, df):
         # take representations
         df["quantiles"] = extract_representations(self.model, df, self.batch_size)
+        df["quantiles"] = _aggregate_group_values(df, "quantiles")
         df[["mu", "sigma"]] = self.generate_distributions(df["quantiles"])
         atom_probs_all = []
         for i, (mus, sigmas, exps) in df[["mu", "sigma", "exp_shifts"]].iterrows():
@@ -524,16 +608,33 @@ class DP5Data(AnalysisData):
         output_dict["CDP5_output"] = []
         # output_dict["HDP5_output"] = []
         # output_dict["DP5_output"] = []
-        for mol, clab, cshift, cexp, cerr, cpr in zip(
+        coverages = getattr(
+            self,
+            "Cassignment_coverage",
+            [_legacy_output_coverage()] * len(self.mols),
+        )
+        for mol, clab, cshift, cexp, cerr, cpr, coverage in zip(
             self.mols,
             self.Clabels,
             self.Cshifts,
             self.Cexp,
             self.Cerrors,
             self.CDP5_atom_probs,
+            coverages,
         ):
-            output = f"\nAssigned C NMR shift for {mol}:"
-            output += self.print_assignment(clab, cshift, cexp, cerr, cpr)
+            output = ""
+            if coverage.get("mode") == "strict":
+                output += f"\nCarbon assignment coverage for {mol}:"
+                output += self.print_coverage(coverage)
+            output += f"\nAssigned C NMR shift for {mol}:"
+            output += self.print_assignment(
+                clab,
+                cshift,
+                cexp,
+                cerr,
+                cpr,
+                grouped=coverage.get("mode") == "strict",
+            )
             output_dict["C_output"].append(output)
 
         # for mol, hlab, hshift, hscal, hexp, herr in zip(
@@ -557,7 +658,32 @@ class DP5Data(AnalysisData):
         return dp5_output
 
     @staticmethod
-    def print_assignment(labels, calculated, exp, error, probs):
+    def print_coverage(coverage):
+        output = f"\nassignment mode: {coverage['mode']}"
+        output += f"\nrequired group count: {coverage['required_group_count']}"
+        output += (
+            "\nexperimental carbon signal count: "
+            f"{coverage['experimental_carbon_signal_count']}"
+        )
+        output += "\nomitted atoms: " + _format_list(coverage["omitted_atoms"])
+        output += "\nextra experimental shifts: " + _format_list(
+            coverage["extra_experimental_shifts"]
+        )
+        output += "\nmissing groups: " + _format_list(coverage["missing_groups"])
+        output += f"\ncoverage status: {coverage['status']}"
+        output += f"\ngroup rescaling applied: {coverage.get('rescaling_applied', True)}"
+        output += "\nper-group assignment:"
+        for assignment in coverage["assignments"]:
+            value = assignment["experimental_shift"]
+            if value is not None and np.isfinite(value):
+                value_text = f"{value:.2f}"
+            else:
+                value_text = "missing"
+            output += f"\n{assignment['group']} -> {value_text}"
+        return output
+
+    @staticmethod
+    def print_assignment(labels, calculated, exp, error, probs, grouped=False):
         """Prints table for molecule"""
 
         s = np.argsort(calculated)
@@ -567,11 +693,132 @@ class DP5Data(AnalysisData):
         serror = error[s]
         sprob = probs[s]
 
-        output = f"\nlabel, calc, exp, error, prob"
+        label_name = "group" if grouped else "label"
+        output = f"\n{label_name}, calc, exp, error, prob"
 
         for lab, calc, ex, er, p in zip(slabels, svalues, sexp, serror, sprob):
-            output += f"\n{lab:6s} {calc:6.2f} {ex:6.2f} {er:6.2f} {p:6.2f}"
+            output += f"\n{lab}, {calc:.2f}, {ex:.2f}, {er:.2f}, {p:.2f}"
         return output
+
+
+def _flatten_group_atom_indices(group_atom_indices):
+    flat_indices = []
+    group_positions = []
+    cursor = 0
+    for indices in group_atom_indices:
+        indices = list(indices)
+        positions = list(range(cursor, cursor + len(indices)))
+        group_positions.append(positions)
+        flat_indices.extend(indices)
+        cursor += len(indices)
+    return np.array(flat_indices, dtype=int), group_positions
+
+
+def _aggregate_group_values(df, column):
+    def aggregate(row):
+        positions = row.get("group_positions")
+        values = np.array(row[column])
+        if positions is None:
+            return values
+        return np.array([values[position].mean(axis=0) for position in positions])
+
+    return df.apply(aggregate, axis=1)
+
+
+def _dp5_cache_signature(mols, use_dft_shifts):
+    molecules = []
+    for mol in mols:
+        if getattr(mol, "C_assignment_mode", "legacy") == "strict":
+            labels = getattr(mol, "C_group_labels", [])
+            exp = getattr(mol, "C_group_exp", [])
+            members = getattr(mol, "C_group_members", [])
+        else:
+            labels = getattr(mol, "C_labels", [])
+            exp = getattr(mol, "C_exp", [])
+            members = [[label] for label in labels]
+        molecules.append(
+            {
+                "input_file": mol.input_file,
+                "mode": getattr(mol, "C_assignment_mode", "legacy"),
+                "labels": [str(label) for label in labels],
+                "members": [[str(label) for label in group] for group in members],
+                "exp": _finite_list(exp),
+            }
+        )
+    return {"use_dft_shifts": use_dft_shifts, "molecules": molecules}
+
+
+def _legacy_coverage(mol):
+    assignments = []
+    labels = getattr(mol, "C_labels", [])
+    exp = getattr(mol, "C_exp", [])
+    for label, value in zip(labels, exp):
+        assignments.append(
+            {
+                "group": str(label),
+                "members": [str(label)],
+                "experimental_shift": _finite_value(value),
+                "status": "assigned" if _finite_value(value) is not None else "missing",
+            }
+        )
+    finite_exp = [_finite_value(value) for value in exp]
+    return {
+        "mode": "legacy",
+        "required_group_count": len(labels),
+        "experimental_carbon_signal_count": sum(
+            value is not None for value in finite_exp
+        ),
+        "omitted_atoms": [],
+        "extra_experimental_shifts": [],
+        "missing_groups": [
+            str(label)
+            for label, value in zip(labels, finite_exp)
+            if value is None
+        ],
+        "assignments": assignments,
+        "status": "legacy",
+        "rescaling_applied": True,
+    }
+
+
+def _coverage_for_dp5(mol, use_dft_shifts):
+    coverage = getattr(mol, "C_assignment_coverage", _legacy_coverage(mol)).copy()
+    if coverage.get("mode") == "strict" and use_dft_shifts:
+        coverage["rescaling_applied"] = False
+    return coverage
+
+
+def _legacy_output_coverage():
+    return {
+        "mode": "legacy",
+        "required_group_count": 0,
+        "experimental_carbon_signal_count": 0,
+        "omitted_atoms": [],
+        "extra_experimental_shifts": [],
+        "missing_groups": [],
+        "assignments": [],
+        "status": "legacy",
+        "rescaling_applied": True,
+    }
+
+
+def _format_list(values):
+    if not values:
+        return "none"
+    return ", ".join(str(value) for value in values)
+
+
+def _finite_list(values):
+    return [_finite_value(value) for value in values]
+
+
+def _finite_value(value):
+    if value is None:
+        return None
+    value = float(value)
+    if np.isfinite(value):
+        return value
+    return None
 
 
 def _load_pickle(path: str):

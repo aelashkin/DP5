@@ -45,6 +45,31 @@ gui_running
 -----------
 Boolean flag (``true`` or ``false``). *Currently not in use.*
 
+nmr
+---
+
+Manual NMR assignment settings.
+
+assignment_mode
+^^^^^^^^^^^^^^^
+
+Manual description assignment mode. Default is ``"strict"``, which validates
+labels, applies equivalence and omission constraints, and scores DP5 carbon
+probabilities over required carbon signal groups. Set to ``"legacy"`` to use
+the previous loose atom-level matching behavior.
+
+allow_extra_peaks
+^^^^^^^^^^^^^^^^^
+
+Default is ``false``. In strict manual mode, allow experimental carbon shifts
+that cannot be assigned to required groups and report them as extra peaks.
+
+allow_missing_peaks
+^^^^^^^^^^^^^^^^^^^
+
+Default is ``false``. In strict manual mode, allow required carbon groups
+without experimental shifts and report the DP5 coverage as partial.
+
 .. _cfg_workflowflags:
 
 workflow
@@ -362,6 +387,5 @@ Type of statictical model to use.
 param_file
 ^^^^^^^^^^^
 Path to DP4 parameters file. If left as ``none``, uses default parameters.
-
 
 

@@ -1,8 +1,28 @@
+from dataclasses import dataclass
 import re
 import networkx as nx
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ManualShift:
+    """One manually described experimental shift."""
+
+    value: float
+    labels: tuple
+    raw: str
+
+
+@dataclass(frozen=True)
+class ManualNMRDescription:
+    """Parsed manual NMR description file."""
+
+    carbon_shifts: tuple
+    proton_shifts: tuple
+    equivalence_groups: tuple
+    omitted_labels: tuple
 
 
 def process_description(nmr_source):
@@ -20,46 +40,140 @@ def process_description(nmr_source):
         equivalence groups, and omitted labels.
     :rtype: tuple[list, list, list, list, list, list]
     """
-    with open(nmr_source) as f:
-        Cexp = f.readline()
-        f.readline()
-        Hexp = f.readline()
-        equivalents = []
-        omits = []
-        f.readline()
-
-        for line in f:
-            if not "OMIT" in line and len(line) > 1:
-                equivalents.append(line[:-1].split(","))
-            elif "OMIT" in line:
-                omits.extend(line[5:-1].split(","))
+    description = parse_manual_description(nmr_source)
     logger.info("Read carbon NMR shifts")
-    C_labels, C_exp = _parse_description(Cexp)
+    C_labels = [list(shift.labels) for shift in description.carbon_shifts]
+    C_exp = [shift.value for shift in description.carbon_shifts]
     logger.info("Read proton NMR shifts")
-    H_labels, H_exp = _parse_description(Hexp)
+    H_labels = [list(shift.labels) for shift in description.proton_shifts]
+    H_exp = [shift.value for shift in description.proton_shifts]
 
-    return C_labels, C_exp, H_labels, H_exp, equivalents, omits
+    return (
+        C_labels,
+        C_exp,
+        H_labels,
+        H_exp,
+        [list(group) for group in description.equivalence_groups],
+        list(description.omitted_labels),
+    )
+
+
+def parse_manual_description(nmr_source):
+    """Parse a manual NMR description into structured records."""
+
+    with open(nmr_source) as f:
+        sections = _split_sections(f.readlines())
+
+    carbon_line = " ".join(sections[0]) if len(sections) > 0 else ""
+    proton_line = " ".join(sections[1]) if len(sections) > 1 else ""
+    constraint_lines = [line for section in sections[2:] for line in section]
+
+    equivalents = []
+    omits = []
+    for line in constraint_lines:
+        if re.match(r"^\s*OMIT\b", line, flags=re.IGNORECASE):
+            omit_text = re.sub(r"^\s*OMIT\b", "", line, flags=re.IGNORECASE).strip()
+            omits.extend(_parse_label_list(omit_text))
+        else:
+            labels = _parse_label_list(line)
+            if labels:
+                equivalents.append(tuple(labels))
+
+    return ManualNMRDescription(
+        carbon_shifts=tuple(_parse_shift_entries(carbon_line)),
+        proton_shifts=tuple(_parse_shift_entries(proton_line)),
+        equivalence_groups=tuple(equivalents),
+        omitted_labels=tuple(omits),
+    )
 
 
 def _parse_description(exp):
 
-    if len(exp) > 0:
-        # Replace all 'or' and 'OR' with ',', remove all spaces and 'any'
-        texp = re.sub(r"or|OR", ",", exp, flags=re.DOTALL)
-        texp = re.sub(r" ", "", texp, flags=re.DOTALL)
-        # Get all assignments, split mulitassignments
-        expLabels = re.findall(r"(?<=\().*?(?=\)|;)", texp, flags=re.DOTALL)
-        expLabels = [x.replace("any", "") for x in expLabels]
-        expLabels = [x.split(",") for x in expLabels]
-        # Remove assignments and get shifts
-        ShiftData = (re.sub(r"\(.*?\)", "", exp.strip(), flags=re.DOTALL)).split(",")
-        logger.info(", ".join(ShiftData))
-        expShifts = [float(x) for x in ShiftData]
-    else:
-        expLabels = []
-        expShifts = []
+    shifts = _parse_shift_entries(exp)
+    expLabels = [list(shift.labels) for shift in shifts]
+    expShifts = [shift.value for shift in shifts]
+    logger.info(", ".join(str(value) for value in expShifts))
 
     return expLabels, expShifts
+
+
+def _split_sections(lines):
+    sections = []
+    current = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if current:
+                sections.append(current)
+                current = []
+            continue
+        current.append(stripped)
+    if current:
+        sections.append(current)
+    return sections
+
+
+def _parse_shift_entries(exp):
+    if not exp:
+        return []
+
+    shifts = []
+    for entry in _split_top_level_commas(exp):
+        entry = entry.strip()
+        if not entry:
+            continue
+        match = re.match(
+            r"^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
+            r"\s*(?:\((.*?)\))?\s*$",
+            entry,
+        )
+        if match is None:
+            raise ValueError(f"Could not parse NMR shift entry: {entry}")
+        value, label_text = match.groups()
+        shifts.append(
+            ManualShift(
+                value=float(value),
+                labels=tuple(_parse_label_list(label_text or "")),
+                raw=entry,
+            )
+        )
+    return shifts
+
+
+def _split_top_level_commas(text):
+    entries = []
+    start = 0
+    depth = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")" and depth > 0:
+            depth -= 1
+        elif char == "," and depth == 0:
+            entries.append(text[start:index])
+            start = index + 1
+    entries.append(text[start:])
+    return entries
+
+
+def _parse_label_list(text):
+    text = re.sub(r"\bor\b", ",", text or "", flags=re.IGNORECASE)
+    labels = []
+    for raw_label in text.split(","):
+        raw_label = raw_label.strip()
+        if not raw_label or raw_label.lower() == "any":
+            continue
+        labels.append(_normalize_label(raw_label))
+    return labels
+
+
+def _normalize_label(label):
+    match = re.match(r"^\s*([A-Za-z]+)\s*([0-9]+)\s*$", label)
+    if match is None:
+        raise ValueError(f"Invalid atom label: {label}")
+    element, index = match.groups()
+    element = element[0].upper() + element[1:].lower()
+    return f"{element}{int(index)}"
 
 
 def pairwise_assignment(calculated, experimental: list):
