@@ -15,3 +15,7 @@ docs/build
 .github/*
 dp5/old_files
 test
+.DS_Store
+manual_assignment_check/**
+!manual_assignment_check/
+!manual_assignment_check/*.input.nmr

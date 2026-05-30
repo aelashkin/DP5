@@ -3,6 +3,8 @@ import re
 import networkx as nx
 import logging
 
+from .errors import NMRAssignmentError
+
 logger = logging.getLogger(__name__)
 
 
@@ -128,7 +130,7 @@ def _parse_shift_entries(exp):
             entry,
         )
         if match is None:
-            raise ValueError(f"Could not parse NMR shift entry: {entry}")
+            raise NMRAssignmentError(f"Could not parse NMR shift entry: {entry}")
         value, label_text = match.groups()
         shifts.append(
             ManualShift(
@@ -170,7 +172,7 @@ def _parse_label_list(text):
 def _normalize_label(label):
     match = re.match(r"^\s*([A-Za-z]+)\s*([0-9]+)\s*$", label)
     if match is None:
-        raise ValueError(f"Invalid atom label: {label}")
+        raise NMRAssignmentError(f"Invalid atom label: {label}")
     element, index = match.groups()
     element = element[0].upper() + element[1:].lower()
     return f"{element}{int(index)}"

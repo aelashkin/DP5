@@ -66,6 +66,7 @@ class DP5:
         """
         data_dic_path = self.output_folder / "dp5" / "data_dic.p"
         expected_signature = _dp5_cache_signature(mols, self.dft_shifts)
+        strict_run = any(_is_strict_assignment(mol) for mol in mols)
         dp5_data = DP5Data(mols, data_dic_path)
         cache_valid = False
         if dp5_data.exists:
@@ -76,6 +77,7 @@ class DP5:
                 logger.info("Existing DP5 probability file does not match assignments")
 
         if not cache_valid:
+            dp5_data.mols = [mol.input_file for mol in mols]
             logger.info("Calculating DP5 probabilites...")
             (
                 dp5_data.Clabels,
@@ -86,33 +88,45 @@ class DP5:
                 dp5_data.CDP5_atom_probs,
                 dp5_data.CDP5_mol_probs,
             ) = self.C_DP5(mols)
-            dp5_data.cache_signature = expected_signature
-            dp5_data.Cassignment_coverage = [
-                _coverage_for_dp5(mol, self.dft_shifts) for mol in mols
-            ]
-            dp5_data.Cassignment_mode = [
-                coverage["mode"] for coverage in dp5_data.Cassignment_coverage
-            ]
-            dp5_data.Ccoverage_status = [
-                coverage["status"] for coverage in dp5_data.Cassignment_coverage
-            ]
-            dp5_data.Cgroup_members = [
-                getattr(mol, "C_group_members", [[label] for label in mol.C_labels])
-                for mol in mols
-            ]
-            dp5_data.Cgroup_atom_indices = [
-                getattr(
-                    mol,
-                    "C_group_atom_indices",
-                    [[int(label[1:]) - 1] for label in mol.C_labels],
+            if strict_run:
+                rescaling_skips = getattr(
+                    self.C_DP5,
+                    "secondary_rescaling_skipped_for_grouping",
+                    [False] * len(mols),
                 )
-                for mol in mols
-            ]
-            dp5_data.Cgroup_labels = dp5_data.Clabels
-            dp5_data.Cgroup_calculated_shifts = dp5_data.Cshifts
-            dp5_data.Cgroup_experimental_shifts = dp5_data.Cexp
-            dp5_data.Cgroup_errors = dp5_data.Cerrors
-            dp5_data.Cgroup_probabilities = dp5_data.CDP5_atom_probs
+                rescaling_skips = _normalise_rescaling_skips(
+                    rescaling_skips, len(mols)
+                )
+                dp5_data.cache_signature = expected_signature
+                dp5_data.Cassignment_coverage = [
+                    _coverage_for_dp5(mol, self.dft_shifts, skip)
+                    for mol, skip in zip(mols, rescaling_skips)
+                ]
+                dp5_data.Cassignment_mode = [
+                    coverage["mode"] for coverage in dp5_data.Cassignment_coverage
+                ]
+                dp5_data.Ccoverage_status = [
+                    coverage["status"] for coverage in dp5_data.Cassignment_coverage
+                ]
+                dp5_data.Cgroup_members = [
+                    getattr(mol, "C_group_members", [[label] for label in mol.C_labels])
+                    for mol in mols
+                ]
+                dp5_data.Cgroup_atom_indices = [
+                    getattr(
+                        mol,
+                        "C_group_atom_indices",
+                        [[int(label[1:]) - 1] for label in mol.C_labels],
+                    )
+                    for mol in mols
+                ]
+                dp5_data.Cgroup_labels = dp5_data.Clabels
+                dp5_data.Cgroup_calculated_shifts = dp5_data.Cshifts
+                dp5_data.Cgroup_experimental_shifts = dp5_data.Cexp
+                dp5_data.Cgroup_errors = dp5_data.Cerrors
+                dp5_data.Cgroup_probabilities = dp5_data.CDP5_atom_probs
+            else:
+                _clear_strict_dp5_metadata(dp5_data)
             dp5_data.save()
         return dp5_data.output
 
@@ -138,7 +152,12 @@ class DP5ProbabilityCalculator:
 
     @abstractmethod
     def rescale_probabilities(
-        self, mol_probs, errors, error_threshold=2, grouped=False
+        self,
+        mol_probs,
+        errors,
+        error_threshold=2,
+        grouped=False,
+        skip_secondary_rescaling=None,
     ):
         """
         Scales and aggregated atomic probabilities.
@@ -173,6 +192,7 @@ class DP5ProbabilityCalculator:
         all_labels = []
         rep_df = []
         grouped_mode = False
+        secondary_rescaling_skips = []
         for mol_id, mol in enumerate(mols):
             (
                 calculated,
@@ -198,6 +218,11 @@ class DP5ProbabilityCalculator:
                     group_atom_indices[i] for i in np.where(has_exp)[0].tolist()
                 ]
                 new_inds, group_positions = _flatten_group_atom_indices(selected_groups)
+                secondary_rescaling_skips.append(
+                    _skip_secondary_rescaling_for_grouping(mol, selected_groups)
+                )
+            if group_atom_indices is None:
+                secondary_rescaling_skips.append(False)
 
             # generate scaled errors
             scaled = scale_nmr(new_calcs, new_exps)
@@ -253,8 +278,12 @@ class DP5ProbabilityCalculator:
 
         # rescale and aggregate probabilities
         weighted_probs, total_probs = self.rescale_probabilities(
-            weighted_probs, cmae, grouped=grouped_mode
+            weighted_probs,
+            cmae,
+            grouped=grouped_mode,
+            skip_secondary_rescaling=secondary_rescaling_skips,
         )
+        self.secondary_rescaling_skipped_for_grouping = secondary_rescaling_skips
 
         calc_shifts_analysed = self.boltzmann_weight(rep_df, "conf_shifts")
         exp_shifts_analysed = rep_df.groupby("mol_id")["exp_shifts"].first()
@@ -397,16 +426,33 @@ class ErrorDP5ProbabilityCalculator(DP5ProbabilityCalculator):
         return probs
 
     def rescale_probabilities(
-        self, mol_probs, errors, error_threshold=2, grouped=False
+        self,
+        mol_probs,
+        errors,
+        error_threshold=2,
+        grouped=False,
+        skip_secondary_rescaling=None,
     ):
         _, total_probs = super().rescale_probabilities(
-            mol_probs, errors, grouped=grouped
+            mol_probs,
+            errors,
+            grouped=grouped,
+            skip_secondary_rescaling=skip_secondary_rescaling,
         )
-        if grouped:
-            return mol_probs, total_probs
+        if skip_secondary_rescaling is None:
+            skip_secondary_rescaling = [grouped] * len(mol_probs)
+        skip_secondary_rescaling = _normalise_rescaling_skips(
+            skip_secondary_rescaling, len(mol_probs)
+        )
         scaled_probs = []
         scaled_total = []
-        for prob, error, total in zip(mol_probs, errors, total_probs):
+        for prob, error, total, skip in zip(
+            mol_probs, errors, total_probs, skip_secondary_rescaling
+        ):
+            if skip:
+                scaled_probs.append(prob)
+                scaled_total.append(total)
+                continue
             if error < error_threshold:
                 vector = np.concatenate((prob, np.atleast_1d(total)))
                 correct = self.dp5_correct_kde(vector)
@@ -725,6 +771,49 @@ def _aggregate_group_values(df, column):
     return df.apply(aggregate, axis=1)
 
 
+def _is_strict_assignment(mol):
+    return getattr(mol, "C_assignment_mode", "legacy") == "strict"
+
+
+def _skip_secondary_rescaling_for_grouping(mol, selected_group_atom_indices):
+    if not _is_strict_assignment(mol):
+        return False
+    scored_group_count = len(selected_group_atom_indices)
+    scored_atom_count = sum(len(indices) for indices in selected_group_atom_indices)
+    original_atom_count = len(getattr(mol, "C_labels", []))
+    return (
+        scored_group_count != scored_atom_count
+        or scored_atom_count != original_atom_count
+    )
+
+
+def _clear_strict_dp5_metadata(dp5_data):
+    for attr in (
+        "cache_signature",
+        "Cassignment_coverage",
+        "Cassignment_mode",
+        "Ccoverage_status",
+        "Cgroup_members",
+        "Cgroup_atom_indices",
+        "Cgroup_labels",
+        "Cgroup_calculated_shifts",
+        "Cgroup_experimental_shifts",
+        "Cgroup_errors",
+        "Cgroup_probabilities",
+    ):
+        if hasattr(dp5_data, attr):
+            delattr(dp5_data, attr)
+
+
+def _normalise_rescaling_skips(rescaling_skips, mol_count):
+    if rescaling_skips is None:
+        rescaling_skips = []
+    rescaling_skips = list(rescaling_skips)
+    if len(rescaling_skips) < mol_count:
+        rescaling_skips.extend([False] * (mol_count - len(rescaling_skips)))
+    return rescaling_skips[:mol_count]
+
+
 def _dp5_cache_signature(mols, use_dft_shifts):
     molecules = []
     for mol in mols:
@@ -745,7 +834,11 @@ def _dp5_cache_signature(mols, use_dft_shifts):
                 "exp": _finite_list(exp),
             }
         )
-    return {"use_dft_shifts": use_dft_shifts, "molecules": molecules}
+    return {
+        "strict_assignment_cache_version": 2,
+        "use_dft_shifts": use_dft_shifts,
+        "molecules": molecules,
+    }
 
 
 def _legacy_coverage(mol):
@@ -781,10 +874,13 @@ def _legacy_coverage(mol):
     }
 
 
-def _coverage_for_dp5(mol, use_dft_shifts):
+def _coverage_for_dp5(mol, use_dft_shifts, secondary_rescaling_skipped=False):
     coverage = getattr(mol, "C_assignment_coverage", _legacy_coverage(mol)).copy()
     if coverage.get("mode") == "strict" and use_dft_shifts:
-        coverage["rescaling_applied"] = False
+        coverage["secondary_rescaling_skipped_for_grouping"] = bool(
+            secondary_rescaling_skipped
+        )
+        coverage["rescaling_applied"] = not secondary_rescaling_skipped
     return coverage
 
 
@@ -799,6 +895,7 @@ def _legacy_output_coverage():
         "assignments": [],
         "status": "legacy",
         "rescaling_applied": True,
+        "secondary_rescaling_skipped_for_grouping": False,
     }
 
 

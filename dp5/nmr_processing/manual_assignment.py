@@ -8,12 +8,10 @@ from typing import Iterable, List, Sequence, Tuple
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+from .errors import NMRAssignmentError
+
 
 logger = logging.getLogger(__name__)
-
-
-class NMRAssignmentError(ValueError):
-    """Raised when manual NMR assignment constraints are inconsistent."""
 
 
 @dataclass(frozen=True)
@@ -39,6 +37,7 @@ class AssignmentCoverage:
     assignments: List[dict]
     status: str
     rescaling_applied: bool = True
+    secondary_rescaling_skipped_for_grouping: bool = False
 
     def to_dict(self):
         return asdict(self)
