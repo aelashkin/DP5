@@ -13,6 +13,8 @@ docs/build
 .gitignore
 *.egg-info*
 .github/*
+!.github/workflows/
+!.github/workflows/*.yaml
 dp5/old_files
 test
 .DS_Store

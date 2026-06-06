@@ -17,17 +17,20 @@ Then change to the top-level directory of the repository and install the reposit
 
 .. code-block:: console
 
-    pip install -e .
+    uv sync
 
 To also install documentation build dependencies (``sphinx`` and ``sphinx-rtd-theme``), use the ``dev`` extra:
 
 .. code-block:: console
 
-    pip install -e ".[dev]"
+    uv sync --extra dev
 
 .. note::
-    The repository works best on x86 Linux machines. 
-    For Apple Silicon, additional library `Tensorflow-metal <https://developer.apple.com/metal/tensorflow-plugin/>`_ will be installed automatically.
+    DP5 installs TensorFlow for neural-network shift prediction on supported platforms.
+    On native macOS Apple Silicon only, DP5 also installs
+    `TensorFlow-metal <https://developer.apple.com/metal/tensorflow-plugin/>`_ as
+    Apple's Metal acceleration plugin. macOS Intel, Windows, and Linux installs
+    use base TensorFlow without ``tensorflow-metal``.
 
 .. _configuration:
 

@@ -10,10 +10,15 @@ If you do not have `uv` installed yet:
 To get started:
 - clone this repository using `git clone https://github.com/ruslankotl/DP5.git`
 - navigate to the folder on your machine
-- create and activate a compatible environment, for example `uv venv --python 3.10 .venv && source .venv/bin/activate`
-- install via `uv pip install -e .` 
-- to also install documentation build dependencies, run `uv pip install -e ".[dev]"`
+- create and activate a compatible environment, for example `uv venv && source .venv/bin/activate`
+- install via `uv sync`
+- to also install documentation build dependencies, run `uv sync --extra dev`
 - run `pydp4 -s <SD_FILE> -n <NMR_FILE> -w w`
+
+DP5 installs TensorFlow for neural-network shift prediction on supported
+platforms. On native macOS Apple Silicon only, DP5 also installs
+`tensorflow-metal` as Apple's Metal acceleration plugin; macOS Intel, Windows,
+and Linux installs use base TensorFlow without `tensorflow-metal`.
 
   For example, run:
 ```

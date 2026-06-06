@@ -18,23 +18,24 @@ maintainers = [
 
 dependencies = [
         "tomli",
-        "numpy<2",
+        "numpy==1.26.4",
         "rdkit==2025.9.3",
         "setuptools<81",
-        "lmfit",
-        "matplotlib",
-        "scipy>=1.10",
-        "nmrglue",
-        "tqdm",
-        "scikit-learn",
-        "pathos",
-        "pandas",
-        "statsmodels",
-        "tensorflow>=2.13,<=2.14; sys_platform != 'darwin' or platform_machine != 'arm64'",
-        "tensorflow-metal>=1.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
-        "dill",
-        "joblib",
-        "networkx>=3"
+        "lmfit<2",
+        "matplotlib<4",
+        "scipy>=1.10,<1.16",
+        "nmrglue<1",
+        "tqdm<5",
+        "scikit-learn<1.8",
+        "pathos<0.4",
+        "pandas<3",
+        "statsmodels<0.15",
+        "tensorflow==2.14.0",
+        "keras==2.14.0",
+        "tensorflow-metal==1.1.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+        "dill<0.5",
+        "joblib<2",
+        "networkx>=3,<4"
 
     ]
 
