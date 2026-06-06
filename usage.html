@@ -1,0 +1,283 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Usage &mdash; DP5 0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=2709fde1"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Anatomy of a config file" href="config_anatomy.html" />
+    <link rel="prev" title="DP5 documentation" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            DP5
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#command-line-arguments">Command line arguments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#workflow-arguments">Workflow arguments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#manual-nmr-descriptions">Manual NMR descriptions</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="config_anatomy.html">Anatomy of a config file</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="analysis.html">Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dp5_analysis.html">DP5 Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dft_methods.html">DFT Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="nmr_processing.html">NMR Processing</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">DP5</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Usage</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/usage.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="usage">
+<h1>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h1>
+<section id="installation">
+<span id="id1"></span><h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
+<p>To use DP5, clone this repository:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">git clone https://github.com/ruslankotl/DP5.git</span>
+</pre></div>
+</div>
+<p>Then change to the top-level directory of the repository and install the repository using</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">uv sync</span>
+</pre></div>
+</div>
+<p>To also install documentation build dependencies (<code class="docutils literal notranslate"><span class="pre">sphinx</span></code> and <code class="docutils literal notranslate"><span class="pre">sphinx-rtd-theme</span></code>), use the <code class="docutils literal notranslate"><span class="pre">dev</span></code> extra:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">uv sync --extra dev</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>DP5 installs TensorFlow for neural-network shift prediction on supported platforms.
+On native macOS Apple Silicon only, DP5 also installs
+<a class="reference external" href="https://developer.apple.com/metal/tensorflow-plugin/">TensorFlow-metal</a> as
+Apple’s Metal acceleration plugin. macOS Intel, Windows, and Linux installs
+use base TensorFlow without <code class="docutils literal notranslate"><span class="pre">tensorflow-metal</span></code>.</p>
+</div>
+</section>
+<section id="configuration">
+<span id="id2"></span><h2>Configuration<a class="headerlink" href="#configuration" title="Link to this heading"></a></h2>
+<p>This version adds <a class="reference internal" href="config_anatomy.html"><span class="doc">human-editable configuration files</span></a>. They can be supplied in <cite>.json</cite> and <cite>.toml</cite> formats.
+The basic elements of former command-line interface are retained for experienced user convenience.</p>
+<section id="command-line-arguments">
+<h3>Command line arguments<a class="headerlink" href="#command-line-arguments" title="Link to this heading"></a></h3>
+<div class="admonition attention">
+<p class="admonition-title">Attention</p>
+<p>Arguments from command line override arguments from configuration file!</p>
+</div>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Command Line Flags</p></th>
+<th class="head"><p>What they mean</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-s</span></code>, <code class="docutils literal notranslate"><span class="pre">--structure_files</span></code></p></td>
+<td><p>Paths to structure files.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-n</span></code>, <code class="docutils literal notranslate"><span class="pre">--nmr_file</span></code></p></td>
+<td><p>Paths to NMR spectra or their description.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-c</span></code>, <code class="docutils literal notranslate"><span class="pre">--config</span></code></p></td>
+<td><p>Path to configuration file for the run. Defaults to <code class="docutils literal notranslate"><span class="pre">dp5/config/default_config.toml</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-o</span></code>, <code class="docutils literal notranslate"><span class="pre">--output</span></code></p></td>
+<td><p>Path to output directory. Defaults to current working folder.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-i</span></code>, <code class="docutils literal notranslate"><span class="pre">--input_type</span></code></p></td>
+<td><p>Input file type. Can be <code class="docutils literal notranslate"><span class="pre">sdf</span></code>, <code class="docutils literal notranslate"><span class="pre">smiles</span></code>, <code class="docutils literal notranslate"><span class="pre">smarts</span></code>, or <code class="docutils literal notranslate"><span class="pre">inchi</span></code>. Default is <code class="docutils literal notranslate"><span class="pre">sdf</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-w</span></code>, <code class="docutils literal notranslate"><span class="pre">--workflow</span> <span class="pre">&lt;flags&gt;</span></code></p></td>
+<td><p>Workflow type. Must be followed by <a class="reference internal" href="#workflowflags"><span class="std std-ref">workflow flags</span></a> without spaces.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--stereocentres</span></code></p></td>
+<td><p>When generating diastereomers, limit generation to specified stereocentres.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--nmr-assignment-mode</span></code></p></td>
+<td><p>Manual NMR assignment mode: <code class="docutils literal notranslate"><span class="pre">strict</span></code> by default, or <code class="docutils literal notranslate"><span class="pre">legacy</span></code> for the previous loose matching behavior.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--allow-extra-peaks</span></code></p></td>
+<td><p>In strict manual mode, report extra experimental carbon shifts instead of aborting.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--allow-missing-peaks</span></code></p></td>
+<td><p>In strict manual mode, report missing required carbon groups instead of aborting.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-l</span></code>, <code class="docutils literal notranslate"><span class="pre">--log_filename</span></code></p></td>
+<td><p>Log file name.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--log_level</span></code></p></td>
+<td><p>Logging levels. Can be <code class="docutils literal notranslate"><span class="pre">warning</span></code>, <code class="docutils literal notranslate"><span class="pre">info</span></code>, or <code class="docutils literal notranslate"><span class="pre">debug</span></code>. Default level is <code class="docutils literal notranslate"><span class="pre">info</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="workflow-arguments">
+<h3>Workflow arguments<a class="headerlink" href="#workflow-arguments" title="Link to this heading"></a></h3>
+<p>Specifies workflow actions. Will load the values from the <a class="reference internal" href="config_anatomy.html#cfg-workflowflags"><span class="std std-ref">configuration file</span></a> if left unset.</p>
+<table class="docutils align-default" id="workflowflags">
+<thead>
+<tr class="row-odd"><th class="head"><p>Workflow Flags</p></th>
+<th class="head"><p>Config file equivalents</p></th>
+<th class="head"><p>What they mean</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">c</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cleanup</span></code></p></td>
+<td><p>generate 3D structure, optimise using MMFF</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">g</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">generate</span></code></p></td>
+<td><p>generate diastereomers</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">m</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">conf_search</span></code></p></td>
+<td><p>perform conformational search</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">o</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dft_opt</span></code></p></td>
+<td><p>optimise geometries using DFT</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">e</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dft_energies</span></code></p></td>
+<td><p>calculate single point energies using DFT</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">n</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dft_nmr</span></code></p></td>
+<td><p>calculate NMR spectra using DFT-GIAO method</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">a</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">assign_only</span></code></p></td>
+<td><p>assignment only <strong>(currently not supported)</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">s</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dp4</span></code></p></td>
+<td><p>perform DP4 analysis</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">w</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dp5</span></code></p></td>
+<td><p>perform DP5 analysis</p></td>
+</tr>
+</tbody>
+</table>
+<p>Default DP4 workflow for establishing stereochemistry would be specified as <code class="docutils literal notranslate"><span class="pre">-w</span> <span class="pre">gnms</span></code>,
+the best results would be produced using <code class="docutils literal notranslate"><span class="pre">-w</span> <span class="pre">gnomes</span></code>.</p>
+<p>In general, conformational search should provide representative geometries,
+DFT optimisation would provide accurate geometries,
+and single-point energies would increase precision
+by re-weighting the conformers.</p>
+</section>
+<section id="manual-nmr-descriptions">
+<h3>Manual NMR descriptions<a class="headerlink" href="#manual-nmr-descriptions" title="Link to this heading"></a></h3>
+<p>Manual description files are strict and equivalence-aware by default. The first
+non-empty section contains comma-separated carbon shifts, the second contains
+comma-separated proton shifts, and later sections may contain one equivalence
+group per line plus optional <code class="docutils literal notranslate"><span class="pre">OMIT</span></code> lines:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>140.1(any),129.7(any),126.7(C10),20.3(C14,C23)
+
+0.0(any)
+
+C1,C3
+C4,C5
+C14,C23
+OMIT C19,H51
+</pre></div>
+</div>
+<p>Labels are element symbols plus 1-based atom indices from the supplied
+molecule/SDF atom order. <code class="docutils literal notranslate"><span class="pre">(any)</span></code> leaves a shift unassigned. In strict mode,
+equivalent carbons collapse into one required carbon signal and every
+non-omitted carbon group must receive exactly one experimental signal. Use
+<code class="docutils literal notranslate"><span class="pre">--nmr-assignment-mode</span> <span class="pre">legacy</span></code> to restore the previous loose atom-level
+matching behavior.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="DP5 documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="config_anatomy.html" class="btn btn-neutral float-right" title="Anatomy of a config file" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Kristaps Ermanis, Alexander Howarth, Ruslan Kotlyarov, Benji Rowlands, Jonathan Goodman.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
