@@ -21,9 +21,16 @@ class Molecule:
         self.charge = sum([at.GetFormalCharge() for at in mol.GetAtoms()])
 
         # estimates force field energy
+        # MMFF94s has no parameters for e.g. boron; fall back to UFF, then to 0
         prop = rdForceFieldHelpers.MMFFGetMoleculeProperties(mol, mmffVariant="MMFF94s")
-        ff = rdForceFieldHelpers.MMFFGetMoleculeForceField(mol, prop)
-        self._energies = np.array([float(ff.CalcEnergy()) * 4.184])
+        if prop is not None:
+            ff = rdForceFieldHelpers.MMFFGetMoleculeForceField(mol, prop)
+        elif rdForceFieldHelpers.UFFHasAllMoleculeParams(mol):
+            ff = rdForceFieldHelpers.UFFGetMoleculeForceField(mol)
+        else:
+            ff = None
+        energy = float(ff.CalcEnergy()) if ff is not None else 0.0
+        self._energies = np.array([energy * 4.184])
         # creates mol object for further manipulation
         self._rdkit_mols = None
         self._populations = None
